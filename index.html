@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>结算话费汇总</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+      :root {
+        --primary: #6179e8;
+        --dark: #23304a;
+        --muted: #697386;
+        --line: #e8ebf2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 42px 24px;
+        background: linear-gradient(135deg, #6476d9, #773f9f);
+        color: var(--dark);
+        font: 15px/1.55 "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: auto;
+        padding: 34px 30px;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 18px 45px #28225b55;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 25px;
+      }
+
+      .intro {
+        margin: 0 0 28px;
+        color: var(--muted);
+      }
+
+      .notice {
+        display: none;
+        margin-bottom: 22px;
+        padding: 13px 16px;
+        border-left: 4px solid #26ca48;
+        border-radius: 5px;
+        background: #edfff0;
+        color: #16813a;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 700;
+      }
+
+      .drop-zone {
+        display: flex;
+        min-height: 92px;
+        align-items: center;
+        justify-content: center;
+        border: 2px dashed transparent;
+        border-radius: 9px;
+        background: var(--primary);
+        color: #fff;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 700;
+        transition: 0.18s;
+      }
+
+      .drop-zone.drag {
+        transform: translateY(-1px);
+        border-color: #cbd4ff;
+        background: #5068d8;
+      }
+
+      input {
+        display: none;
+      }
+
+      #files {
+        display: flex;
+        min-height: 24px;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin: 14px 0 26px;
+      }
+
+      .file {
+        padding: 7px 10px;
+        border-radius: 6px;
+        background: #f0f2f7;
+        color: #526078;
+        font-size: 13px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 11px;
+        margin-bottom: 28px;
+      }
+
+      button {
+        padding: 12px 21px;
+        border: 0;
+        border-radius: 7px;
+        background: #95a6a9;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      button:hover {
+        filter: brightness(0.95);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #analyze {
+        flex: 1;
+        background: var(--primary);
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 23px;
+      }
+
+      .card {
+        min-height: 97px;
+        padding: 17px 20px;
+        border-left: 4px solid #6881f4;
+        border-radius: 9px;
+        background: #f7f8fa;
+      }
+
+      .card span {
+        display: block;
+        color: #8994a7;
+        font-size: 13px;
+      }
+
+      .card strong {
+        display: block;
+        margin-top: 7px;
+        color: #5d78eb;
+        font-size: 24px;
+      }
+
+      .table-wrap {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+
+      th {
+        background: #f1f3f6;
+      }
+
+      th:last-child,
+      td:last-child {
+        text-align: right;
+        font-family: Consolas, "Microsoft YaHei", monospace;
+      }
+
+      tfoot td {
+        background: #fff8ca;
+        font-weight: 700;
+      }
+
+      .empty {
+        padding: 36px;
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .rule {
+        margin-top: 19px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .error {
+        color: #c62f32;
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 16px;
+        }
+
+        main {
+          padding: 24px 17px;
+        }
+
+        .cards {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .actions {
+          flex-wrap: wrap;
+        }
+
+        #analyze {
+          flex-basis: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>结算话费汇总</h1>
+      <p class="intro">合并多个结算 Excel，按结算账户号码汇总话费。</p>
+
+      <div id="notice" class="notice" role="status"></div>
+      <label for="picker">选择结算表文件（支持多个 .xlsx / .xls 文件）</label>
+      <div id="dropZone" class="drop-zone" tabindex="0">
+        📁&nbsp; 点击或拖拽 Excel 文件到这里
+      </div>
+      <input id="picker" type="file" accept=".xlsx,.xls" multiple />
+      <div id="files"></div>
+
+      <div class="actions">
+        <button id="analyze" disabled>分析统计</button>
+        <button id="clear" disabled>清空</button>
+        <button id="export" disabled>📥 导出结果</button>
+      </div>
+
+      <section class="cards">
+        <div class="card">
+          <span>包含文件数</span>
+          <strong id="fileCount">0</strong>
+        </div>
+        <div class="card">
+          <span>纳入明细行数</span>
+          <strong id="rowCount">0</strong>
+        </div>
+        <div class="card">
+          <span>汇总线路数</span>
+          <strong id="accountCount">0</strong>
+        </div>
+        <div class="card">
+          <span>总计金额</span>
+          <strong id="total">¥0.000</strong>
+        </div>
+      </section>
+
+      <div id="result" class="empty">请选择一个或多个结算 Excel 文件。</div>
+      <p class="rule">
+        统计规则：以“结算账户号码”分组、求和“话费总计”；自动排除账户号码含“呼入结算”的记录。其他字段不会参与统计。
+      </p>
+    </main>
+
+    <script>
+      const picker = document.querySelector("#picker");
+      const dropZone = document.querySelector("#dropZone");
+      const filesEl = document.querySelector("#files");
+      const notice = document.querySelector("#notice");
+      const result = document.querySelector("#result");
+      const buttons = ["#analyze", "#clear", "#export"].map((selector) =>
+        document.querySelector(selector),
+      );
+
+      let selected = [];
+      let summary = [];
+
+      const esc = (value) =>
+        String(value).replace(/[&<>"']/g, (character) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[character],
+        );
+
+      const money = (amount) =>
+        Number(amount).toLocaleString("zh-CN", {
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 3,
+        });
+
+      function show(message, error = false) {
+        notice.textContent = message;
+        notice.className = error ? "notice error" : "notice";
+        notice.style.display = "block";
+      }
+
+      function refreshFiles() {
+        filesEl.innerHTML = selected
+          .map((file) => `<span class="file">📄 ${esc(file.name)}</span>`)
+          .join("");
+        buttons[0].disabled = buttons[1].disabled = !selected.length;
+        buttons[2].disabled = true;
+      }
+
+      function setFiles(fileList) {
+        selected = [...fileList].filter((file) => /\.(xlsx|xls)$/i.test(file.name));
+        summary = [];
+        refreshFiles();
+
+        if (selected.length) {
+          show(`✓ 已选择 ${selected.length} 个文件，点击“分析统计”开始处理。`);
+        }
+      }
+
+      dropZone.onclick = () => picker.click();
+      dropZone.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") picker.click();
+      };
+      picker.onchange = (event) => setFiles(event.target.files);
+
+      ["dragenter", "dragover"].forEach((type) =>
+        dropZone.addEventListener(type, (event) => {
+          event.preventDefault();
+          dropZone.classList.add("drag");
+        }),
+      );
+
+      ["dragleave", "drop"].forEach((type) =>
+        dropZone.addEventListener(type, (event) => {
+          event.preventDefault();
+          dropZone.classList.remove("drag");
+        }),
+      );
+
+      dropZone.addEventListener("drop", (event) =>
+        setFiles(event.dataTransfer.files),
+      );
+
+      document.querySelector("#clear").onclick = () => {
+        selected = [];
+        summary = [];
+        picker.value = "";
+        filesEl.innerHTML = "";
+        result.className = "empty";
+        result.textContent = "请选择一个或多个结算 Excel 文件。";
+
+        ["fileCount", "rowCount", "accountCount"].forEach((id) => {
+          document.querySelector(`#${id}`).textContent = "0";
+        });
+
+        document.querySelector("#total").textContent = "¥0.000";
+        notice.style.display = "none";
+        refreshFiles();
+      };
+
+      function findHeader(row, name) {
+        return row.findIndex(
+          (value) => String(value ?? "").trim().replace(/\s/g, "") === name,
+        );
+      }
+
+      async function parse(file) {
+        const book = XLSX.read(await file.arrayBuffer(), {
+          type: "array",
+          raw: false,
+        });
+        const rows = XLSX.utils.sheet_to_json(
+          book.Sheets[book.SheetNames[0]],
+          { header: 1, defval: "" },
+        );
+        const header = rows[0] || [];
+        const accountIndex = findHeader(header, "结算账户号码");
+        const chargeIndex = findHeader(header, "话费总计");
+
+        if (accountIndex < 0 || chargeIndex < 0) {
+          throw new Error(
+            `“${file.name}”缺少“结算账户号码”或“话费总计”列`,
+          );
+        }
+
+        return rows.slice(1).map((row) => ({
+          account: String(row[accountIndex] ?? "").trim(),
+          charge: Number(String(row[chargeIndex] ?? "").replace(/,/g, "")),
+        }));
+      }
+
+      document.querySelector("#analyze").onclick = async () => {
+        try {
+          if (!window.XLSX) {
+            throw new Error("Excel 解析组件未能加载，请检查网络后刷新页面。");
+          }
+
+          buttons.forEach((button) => (button.disabled = true));
+          show("正在读取和汇总文件，请稍候…");
+
+          const data = (await Promise.all(selected.map(parse)))
+            .flat()
+            .filter(
+              (row) =>
+                row.account &&
+                !row.account.includes("呼入结算") &&
+                Number.isFinite(row.charge),
+            );
+          const totalsByAccount = new Map();
+
+          data.forEach((row) => {
+            totalsByAccount.set(
+              row.account,
+              (totalsByAccount.get(row.account) || 0) + row.charge,
+            );
+          });
+
+          summary = [...totalsByAccount]
+            .map(([account, charge]) => ({ account, charge }))
+            .sort((a, b) => a.account.localeCompare(b.account, "zh-CN"));
+
+          const total = summary.reduce((sum, row) => sum + row.charge, 0);
+          document.querySelector("#fileCount").textContent = selected.length;
+          document.querySelector("#rowCount").textContent =
+            data.length.toLocaleString();
+          document.querySelector("#accountCount").textContent = summary.length;
+          document.querySelector("#total").textContent = `¥${money(total)}`;
+
+          result.className = "table-wrap";
+          result.innerHTML = `
+            <table>
+              <thead>
+                <tr>
+                  <th>结算账户号码</th>
+                  <th>求和项：话费总计</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${summary
+                  .map(
+                    (row) => `
+                      <tr>
+                        <td>${esc(row.account)}</td>
+                        <td>${money(row.charge)}</td>
+                      </tr>
+                    `,
+                  )
+                  .join("")}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>总计</td>
+                  <td>${money(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          `;
+
+          buttons[0].disabled = buttons[1].disabled = false;
+          buttons[2].disabled = !summary.length;
+          show(`✓ 成功分析 ${selected.length} 个文件，已排除呼入结算记录。`);
+        } catch (error) {
+          buttons[0].disabled = buttons[1].disabled = !selected.length;
+          show(error.message || "文件读取失败。", true);
+        }
+      };
+
+      document.querySelector("#export").onclick = () => {
+        const out = summary.map((row) => ({
+          结算账户号码: row.account,
+          话费总计: Number(row.charge.toFixed(3)),
+        }));
+
+        out.push({
+          结算账户号码: "总计",
+          话费总计: Number(
+            summary.reduce((sum, row) => sum + row.charge, 0).toFixed(3),
+          ),
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(out);
+        worksheet["!cols"] = [{ wch: 55 }, { wch: 18 }];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "话费汇总");
+        XLSX.writeFile(workbook, "结算话费汇总.xlsx");
+      };
+    </script>
+  </body>
+</html>
